@@ -432,15 +432,26 @@
         }
 
         async function createGame() {
+            // Debug log
+            console.log('🎮 Tentativo creazione partita...');
+            
             const name = document.getElementById('playerName').value.trim();
             if (!name) {
                 alert('Inserisci il tuo nome!');
                 return;
             }
 
+            // Mostra loading
+            const createBtn = event.target;
+            const originalText = createBtn.textContent;
+            createBtn.textContent = '⏳ Creando...';
+            createBtn.disabled = true;
+
             playerName = name;
             currentGameId = generateGameCode();
-            playerRole = 'red'; // Il creatore è sempre rosso
+            playerRole = 'red';
+
+            console.log(`🎯 Codice partita: ${currentGameId}`);
 
             const gameData = {
                 board: initialBoard,
@@ -456,12 +467,27 @@
             };
 
             try {
+                console.log('📡 Tentativo scrittura Firebase...');
                 await set(ref(database, `games/${currentGameId}`), gameData);
+                console.log('✅ Partita creata con successo!');
+                
                 setupDisconnectHandler();
                 showGameArea();
                 listenToGame();
             } catch (error) {
-                alert('Errore nella creazione della partita: ' + error.message);
+                console.error('❌ Errore Firebase:', error);
+                
+                // Reset button
+                createBtn.textContent = originalText;
+                createBtn.disabled = false;
+                
+                if (error.code === 'PERMISSION_DENIED') {
+                    alert('🔒 Errore permessi Firebase!\n\nVai su Firebase Console → Realtime Database → Rules e imposta:\n\n{\n  "rules": {\n    ".read": true,\n    ".write": true\n  }\n}');
+                } else if (error.code === 'NETWORK_ERROR') {
+                    alert('🌐 Problema di connessione!\nControlla la tua connessione internet.');
+                } else {
+                    alert(`❌ Errore: ${error.message}\n\nCodice: ${error.code || 'Unknown'}`);
+                }
             }
         }
 
@@ -470,6 +496,8 @@
         }
 
         async function joinGame() {
+            console.log('🔗 Tentativo unione partita...');
+            
             const name = document.getElementById('playerName').value.trim();
             const code = document.getElementById('gameCode').value.trim().toUpperCase();
             
@@ -478,27 +506,36 @@
                 return;
             }
 
+            const joinBtn = event.target;
+            const originalText = joinBtn.textContent;
+            joinBtn.textContent = '⏳ Connettendo...';
+            joinBtn.disabled = true;
+
             playerName = name;
             currentGameId = code;
 
             try {
-                // Controlla se la partita esiste
-                const gameRef = ref(database, `games/${currentGameId}`);
+                console.log(`🔍 Controllo partita ${code}...`);
                 
-                // Prima determina il ruolo
-                const gameSnapshot = await new Promise((resolve) => {
+                const gameRef = ref(database, `games/${currentGameId}`);
+                const gameSnapshot = await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => reject(new Error('Timeout')), 10000);
                     on(gameRef, 'value', (snapshot) => {
-                        resolve(snapshot);
+                        clearTimeout(timeout);
                         off(gameRef, 'value');
+                        resolve(snapshot);
+                    }, (error) => {
+                        clearTimeout(timeout);
+                        reject(error);
                     });
                 });
 
                 if (!gameSnapshot.exists()) {
-                    alert('Partita non trovata!');
-                    return;
+                    throw new Error('Partita non trovata! Controlla il codice.');
                 }
 
                 const gameData = gameSnapshot.val();
+                console.log('📊 Dati partita ricevuti:', gameData);
                 
                 // Determina il ruolo del giocatore
                 if (!gameData.players.blue.name) {
@@ -507,21 +544,37 @@
                         name: playerName,
                         connected: true
                     });
+                    console.log('🔵 Assegnato ruolo BLU');
                 } else if (!gameData.players.red.name) {
                     playerRole = 'red';
                     await update(ref(database, `games/${currentGameId}/players/red`), {
                         name: playerName,
                         connected: true
                     });
+                    console.log('🔴 Assegnato ruolo ROSSO');
                 } else {
                     playerRole = 'spectator';
+                    console.log('👁️ Modalità spettatore');
                 }
 
                 setupDisconnectHandler();
                 showGameArea();
                 listenToGame();
+                
             } catch (error) {
-                alert('Errore nell\'unirsi alla partita: ' + error.message);
+                console.error('❌ Errore unione:', error);
+                
+                // Reset button
+                joinBtn.textContent = originalText;
+                joinBtn.disabled = false;
+                
+                if (error.code === 'PERMISSION_DENIED') {
+                    alert('🔒 Errore permessi Firebase!');
+                } else if (error.message === 'Timeout') {
+                    alert('⏱️ Timeout connessione! Riprova.');
+                } else {
+                    alert(`❌ Errore: ${error.message}`);
+                }
             }
         }
 
