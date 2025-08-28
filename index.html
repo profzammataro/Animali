@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dou Shou Qi - Multiplayer Online</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #2d5016, #4a7c2a);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: white;
+        }
+
+        .game-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            color: #333;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2d5016;
+            margin-bottom: 20px;
+            font-size: 2.2em;
+        }
+
+        .lobby {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .lobby input {
+            padding: 12px;
+            margin: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            width: 200px;
+        }
+
+        .lobby button {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            transition: background 0.3s;
+        }
+
+        .lobby button:hover {
+            background: #388e3c;
+        }
+
+        .lobby button.secondary {
+            background: #2196f3;
+        }
+
+        .lobby button.secondary:hover {
+            background: #1976d2;
+        }
+
+        .connection-info {
+            background: #e3f2fd;
+            border: 2px solid #2196f3;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f0f8f0;
+            border-radius: 8px;
+        }
+
+        .player-info {
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 5px;
+            position: relative;
+        }
+
+        .player-red { background: #ffebee; color: #c62828; }
+        .player-blue { background: #e3f2fd; color: #1976d2; }
+
+        .online-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            position: absolute;
+            top: 5px;
+            right: 5px;
+        }
+
+        .online { background: #4caf50; }
+        .offline { background: #f44336; }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: repeat(9, 1fr);
+            gap: 2px;
+            background: #8d6e63;
+            padding: 10px;
+            border-radius: 10px;
+            margin: 20px auto;
+            max-width: 500px;
+            aspect-ratio: 7/9;
+        }
+
+        .cell {
+            background: #d7ccc8;
+            border: 1px solid #8d6e63;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            font-size: 24px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .cell:hover {
+            background: #bcaaa4;
+        }
+
+        .cell.selected {
+            background: #ffeb3b !important;
+            box-shadow: 0 0 10px #ffc107;
+        }
+
+        .cell.possible-move {
+            background: #c8e6c9 !important;
+        }
+
+        .water {
+            background: #81d4fa !important;
+            color: #0277bd;
+        }
+
+        .trap {
+            background: #ffcdd2 !important;
+        }
+
+        .den {
+            background: #fff9c4 !important;
+            border: 3px solid #f57f17;
+        }
+
+        .piece {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 16px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .red-piece {
+            background: linear-gradient(45deg, #f44336, #c62828);
+            color: white;
+            border: 2px solid #b71c1c;
+        }
+
+        .blue-piece {
+            background: linear-gradient(45deg, #2196f3, #1976d2);
+            color: white;
+            border: 2px solid #0d47a1;
+        }
+
+        .status {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 15px 0;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .status.red-turn { background: #ffebee; color: #c62828; }
+        .status.blue-turn { background: #e3f2fd; color: #1976d2; }
+        .status.game-over { background: #fff3e0; color: #ef6c00; }
+        .status.waiting { background: #f3e5f5; color: #7b1fa2; }
+
+        .reset-btn {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px auto;
+            display: block;
+            transition: background 0.3s;
+        }
+
+        .reset-btn:hover {
+            background: #388e3c;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .rules {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .rules h3 {
+            color: #2d5016;
+            margin-bottom: 10px;
+        }
+
+        .animal-hierarchy {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .animal-card {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .last-move {
+            background: rgba(255, 235, 59, 0.3);
+            animation: pulse 1s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% { background: rgba(255, 235, 59, 0.6); }
+            100% { background: rgba(255, 235, 59, 0.1); }
+        }
+
+        .spectator-mode {
+            background: #fff3e0;
+            border: 2px solid #ff9800;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
+            text-align: center;
+            color: #ef6c00;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🐅 Dou Shou Qi - Multiplayer Online 🦁</h1>
+        
+        <!-- Lobby -->
+        <div id="lobby" class="lobby">
+            <h2>🌐 Connetti con un Amico</h2>
+            <p>Inserisci il tuo nome e crea una stanza o unisciti a una esistente</p>
+            
+            <div style="margin: 20px 0;">
+                <input type="text" id="playerName" placeholder="Il tuo nome" maxlength="20">
+            </div>
+            
+            <div style="margin: 20px 0;">
+                <button onclick="createGame()">🎮 Crea Nuova Partita</button>
+                <button onclick="showJoinForm()" class="secondary">🔗 Unisciti a Partita</button>
+            </div>
+            
+            <div id="joinForm" class="hidden" style="margin-top: 20px;">
+                <input type="text" id="gameCode" placeholder="Codice Partita (6 caratteri)" maxlength="6">
+                <br>
+                <button onclick="joinGame()" style="margin-top: 10px;">Unisciti!</button>
+            </div>
+        </div>
+
+        <!-- Game Area -->
+        <div id="gameArea" class="hidden">
+            <div class="connection-info" id="connectionInfo">
+                Condividi questo codice con il tuo amico: <strong id="shareCode">-----</strong>
+            </div>
+            
+            <div class="game-info">
+                <div class="player-info player-red" id="redPlayer">
+                    <span class="online-indicator" id="redStatus"></span>
+                    Giocatore Rosso: <span id="redName">In attesa...</span>
+                </div>
+                <div class="player-info player-blue" id="bluePlayer">
+                    <span class="online-indicator" id="blueStatus"></span>
+                    Giocatore Blu: <span id="blueName">In attesa...</span>
+                </div>
+            </div>
+
+            <div class="status" id="gameStatus">In attesa del secondo giocatore...</div>
+            
+            <div id="spectatorNotice" class="spectator-mode hidden">
+                👁️ Stai guardando come spettatore - Non puoi fare mosse
+            </div>
+            
+            <div class="board" id="gameBoard"></div>
+            
+            <button class="reset-btn" onclick="requestNewGame()">Richiedi Nuova Partita</button>
+            <button class="reset-btn" onclick="leaveGame()" style="background: #f44336;">Abbandona Partita</button>
+        </div>
+
+        <div class="rules">
+            <h3>🎯 Come si gioca Online:</h3>
+            <p><strong>1.</strong> Crea una partita e condividi il codice con il tuo amico</p>
+            <p><strong>2.</strong> Attendete che si connetta entrambi</p>
+            <p><strong>3.</strong> Il giocatore Rosso inizia sempre per primo</p>
+            <p><strong>Obiettivo:</strong> Entra nella tana avversaria o cattura tutti i pezzi nemici.</p>
+            
+            <h3>🏆 Gerarchia degli Animali:</h3>
+            <div class="animal-hierarchy">
+                <div class="animal-card">🐘 Elefante (8)</div>
+                <div class="animal-card">🦁 Leone (7)</div>
+                <div class="animal-card">🐅 Tigre (6)</div>
+                <div class="animal-card">🐆 Leopardo (5)</div>
+            </div>
+            <div class="animal-hierarchy">
+                <div class="animal-card">🐺 Lupo (4)</div>
+                <div class="animal-card">🐕 Cane (3)</div>
+                <div class="animal-card">🐱 Gatto (2)</div>
+                <div class="animal-card">🐭 Topo (1)*</div>
+            </div>
+            
+            <p style="margin-top: 10px;"><strong>*</strong> Il Topo può catturare l'Elefante e nuotare!</p>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+        import { getDatabase, ref, set, push, on, off, update, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCQFC0NphhKQet4XArf94mI-jCdG-zwA-g",
+            authDomain: "animali-21113.firebaseapp.com",
+            databaseURL: "https://animali-21113-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "animali-21113",
+            storageBucket: "animali-21113.firebasestorage.app",
+            messagingSenderId: "144035894683",
+            appId: "1:144035894683:web:3f03143f8855cdb7cf7d3e"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // Global variables
+        let currentGameId = null;
+        let playerRole = null; // 'red', 'blue', or 'spectator'
+        let playerName = '';
+        let gameListener = null;
+
+        // Game state
+        const animals = {
+            1: { name: 'Topo', emoji: '🐭' },
+            2: { name: 'Gatto', emoji: '🐱' },
+            3: { name: 'Cane', emoji: '🐕' },
+            4: { name: 'Lupo', emoji: '🐺' },
+            5: { name: 'Leopardo', emoji: '🐆' },
+            6: { name: 'Tigre', emoji: '🐅' },
+            7: { name: 'Leone', emoji: '🦁' },
+            8: { name: 'Elefante', emoji: '🐘' }
+        };
+
+        const initialBoard = [
+            [null, {player:'blue',type:7}, null, {player:'blue',type:8}, null, {player:'blue',type:7}, null],
+            [null, null, {player:'blue',type:6}, null, {player:'blue',type:6}, null, null],
+            [{player:'blue',type:1}, null, null, null, null, null, {player:'blue',type:1}],
+            [null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null],
+            [{player:'red',type:1}, null, null, null, null, null, {player:'red',type:1}],
+            [null, null, {player:'red',type:6}, null, {player:'red',type:6}, null, null],
+            [null, {player:'red',type:7}, null, {player:'red',type:8}, null, {player:'red',type:7}, null]
+        ];
+
+        const specialCells = {
+            water: [[3,1], [3,2], [4,1], [4,2], [5,1], [5,2], [3,4], [3,5], [4,4], [4,5], [5,4], [5,5]],
+            redTraps: [[8,2], [7,3], [8,4]],
+            blueTraps: [[0,2], [1,3], [0,4]],
+            redDen: [[8,3]],
+            blueDen: [[0,3]]
+        };
+
+        let selectedPiece = null;
+
+        // Make functions global
+        window.createGame = createGame;
+        window.showJoinForm = showJoinForm;
+        window.joinGame = joinGame;
+        window.requestNewGame = requestNewGame;
+        window.leaveGame = leaveGame;
+
+        function generateGameCode() {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+
+        async function createGame() {
+            const name = document.getElementById('playerName').value.trim();
+            if (!name) {
+                alert('Inserisci il tuo nome!');
+                return;
+            }
+
+            playerName = name;
+            currentGameId = generateGameCode();
+            playerRole = 'red'; // Il creatore è sempre rosso
+
+            const gameData = {
+                board: initialBoard,
+                currentPlayer: 'red',
+                gameOver: false,
+                winner: null,
+                players: {
+                    red: { name: playerName, connected: true },
+                    blue: { name: null, connected: false }
+                },
+                createdAt: Date.now(),
+                lastMove: null
+            };
+
+            try {
+                await set(ref(database, `games/${currentGameId}`), gameData);
+                setupDisconnectHandler();
+                showGameArea();
+                listenToGame();
+            } catch (error) {
+                alert('Errore nella creazione della partita: ' + error.message);
+            }
+        }
+
+        function showJoinForm() {
+            document.getElementById('joinForm').classList.remove('hidden');
+        }
+
+        async function joinGame() {
+            const name = document.getElementById('playerName').value.trim();
+            const code = document.getElementById('gameCode').value.trim().toUpperCase();
+            
+            if (!name || !code) {
+                alert('Inserisci nome e codice partita!');
+                return;
+            }
+
+            playerName = name;
+            currentGameId = code;
+
+            try {
+                // Controlla se la partita esiste
+                const gameRef = ref(database, `games/${currentGameId}`);
+                
+                // Prima determina il ruolo
+                const gameSnapshot = await new Promise((resolve) => {
+                    on(gameRef, 'value', (snapshot) => {
+                        resolve(snapshot);
+                        off(gameRef, 'value');
+                    });
+                });
+
+                if (!gameSnapshot.exists()) {
+                    alert('Partita non trovata!');
+                    return;
+                }
+
+                const gameData = gameSnapshot.val();
+                
+                // Determina il ruolo del giocatore
+                if (!gameData.players.blue.name) {
+                    playerRole = 'blue';
+                    await update(ref(database, `games/${currentGameId}/players/blue`), {
+                        name: playerName,
+                        connected: true
+                    });
+                } else if (!gameData.players.red.name) {
+                    playerRole = 'red';
+                    await update(ref(database, `games/${currentGameId}/players/red`), {
+                        name: playerName,
+                        connected: true
+                    });
+                } else {
+                    playerRole = 'spectator';
+                }
+
+                setupDisconnectHandler();
+                showGameArea();
+                listenToGame();
+            } catch (error) {
+                alert('Errore nell\'unirsi alla partita: ' + error.message);
+            }
+        }
+
+        function setupDisconnectHandler() {
+            if (playerRole !== 'spectator') {
+                const playerRef = ref(database, `games/${currentGameId}/players/${playerRole}/connected`);
+                onDisconnect(playerRef).set(false);
+            }
+        }
+
+        function showGameArea() {
+            document.getElementById('lobby').classList.add('hidden');
+            document.getElementById('gameArea').classList.remove('hidden');
+            document.getElementById('shareCode').textContent = currentGameId;
+            
+            if (playerRole === 'spectator') {
+                document.getElementById('spectatorNotice').classList.remove('hidden');
+            }
+            
+            initializeBoard();
+        }
+
+        function listenToGame() {
+            if (gameListener) off(ref(database, `games/${currentGameId}`), 'value', gameListener);
+            
+            const gameRef = ref(database, `games/${currentGameId}`);
+            gameListener = (snapshot) => {
+                if (snapshot.exists()) {
+                    const gameData = snapshot.val();
+                    updateGameUI(gameData);
+                } else {
+                    alert('La partita è stata eliminata.');
+                    leaveGame();
+                }
+            };
+            
+            on(gameRef, 'value', gameListener);
+        }
+
+        function updateGameUI(gameData) {
+            // Aggiorna info giocatori
+            document.getElementById('redName').textContent = gameData.players.red.name || 'In attesa...';
+            document.getElementById('blueName').textContent = gameData.players.blue.name || 'In attesa...';
+            
+            document.getElementById('redStatus').className = 
+                `online-indicator ${gameData.players.red.connected ? 'online' : 'offline'}`;
+            document.getElementById('blueStatus').className = 
+                `online-indicator ${gameData.players.blue.connected ? 'online' : 'offline'}`;
+
+            // Aggiorna board
+            updateBoard(gameData.board);
+            
+            // Aggiorna status
+            updateGameStatus(gameData);
+            
+            // Evidenzia ultima mossa
+            if (gameData.lastMove) {
+                highlightLastMove(gameData.lastMove);
+            }
+        }
+
+        function updateGameStatus(gameData) {
+            const statusEl = document.getElementById('gameStatus');
+            
+            if (gameData.gameOver) {
+                statusEl.textContent = `🎉 Ha vinto ${gameData.winner === 'red' ? 'Rosso' : 'Blu'}! 🎉`;
+                statusEl.className = 'status game-over';
+            } else if (!gameData.players.red.name || !gameData.players.blue.name) {
+                statusEl.textContent = 'In attesa del secondo giocatore...';
+                statusEl.className = 'status waiting';
+            } else {
+                const currentPlayerName = gameData.currentPlayer === 'red' ? 
+                    gameData.players.red.name : gameData.players.blue.name;
+                    
+                statusEl.textContent = `Turno di ${currentPlayerName} (${gameData.currentPlayer === 'red' ? 'Rosso' : 'Blu'})`;
+                statusEl.className = `status ${gameData.currentPlayer}-turn`;
+            }
+        }
+
+        function initializeBoard() {
+            const gameBoard = document.getElementById('gameBoard');
+            gameBoard.innerHTML = '';
+            
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 7; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    
+                    if (isWater(row, col)) cell.classList.add('water');
+                    if (isTrap(row, col)) cell.classList.add('trap');
+                    if (isDen(row, col)) cell.classList.add('den');
+                    
+                    cell.addEventListener('click', () => handleCellClick(row, col));
+                    gameBoard.appendChild(cell);
+                }
+            }
+        }
+
+        function updateBoard(board) {
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 7; col++) {
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    const piece = board[row][col];
+                    
+                    if (piece) {
+                        const animal = animals[piece.type];
+                        cell.innerHTML = `<div class="piece ${piece.player}-piece">${animal.emoji}</div>`;
+                    } else {
+                        cell.innerHTML = '';
+                    }
+                }
+            }
+        }
+
+        function highlightLastMove(lastMove) {
+            setTimeout(() => {
+                const fromCell = document.querySelector(`[data-row="${lastMove.from[0]}"][data-col="${lastMove.from[1]}"]`);
+                const toCell = document.querySelector(`[data-row="${lastMove.to[0]}"][data-col="${lastMove.to[1]}"]`);
+                
+                if (toCell) toCell.classList.add('last-move');
+                
+                setTimeout(() => {
+                    if (toCell) toCell.classList.remove('last-move');
+                }, 1000);
+            }, 100);
+        }
+
+        async function handleCellClick(row, col) {
+            if (playerRole === 'spectator') return;
+            
+            // Ottieni i dati di gioco correnti
+            const gameRef = ref(database, `games/${currentGameId}`);
+            const snapshot = await new Promise((resolve) => {
+                on(gameRef, 'value', (snapshot) => {
+                    resolve(snapshot);
+                    off(gameRef, 'value');
+                });
+            });
+            
+            if (!snapshot.exists()) return;
+            const gameData = snapshot.val();
+            
+            if (gameData.gameOver) return;
+            if (gameData.currentPlayer !== playerRole) return;
+            if (!gameData.players.red.name || !gameData.players.blue.name) return;
+            
+            const board = gameData.board;
+            const piece = board[row][col];
+            
+            if (selectedPiece) {
+                if (canMoveTo(board, selectedPiece.row, selectedPiece.col, row, col)) {
+                    await makeMove(selectedPiece.row, selectedPiece.col, row, col, gameData);
+                    selectedPiece = null;
+                    clearHighlights();
+                } else {
+                    if (piece && piece.player === playerRole) {
+                        selectPiece(row, col, board);
+                    } else {
+                        selectedPiece = null;
+                        clearHighlights();
+                    }
+                }
+            } else if (piece && piece.player === playerRole) {
+                selectPiece(row, col, board);
+            }
+        }
+
+        function selectPiece(row, col, board) {
+            selectedPiece = { row, col };
+            clearHighlights();
+            
+            const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            cell.classList.add('selected');
+            
+            const possibleMoves = getPossibleMoves(board, row, col);
+            possibleMoves.forEach(([r, c]) => {
+                const targetCell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+                targetCell.classList.add('possible-move');
+            });
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('selected', 'possible-move');
+            });
+        }
+
+        async function makeMove(fromRow, fromCol, toRow, toCol, gameData) {
+            const newBoard = JSON.parse(JSON.stringify(gameData.board));
+            const piece = newBoard[fromRow][fromCol];
+            
+            newBoard[toRow][toCol] = piece;
+            newBoard[fromRow][fromCol] = null;
+            
+            const nextPlayer = gameData.currentPlayer === 'red' ? 'blue' : 'red';
+            
+            // Controlla condizioni di vittoria
+            let gameOver = false;
+            let winner = null;
+            
+            // Vittoria per raggiungimento tana
+            if ((toRow === 0 && toCol === 3 && piece.player === 'red') ||
+                (toRow === 8 && toCol === 3 && piece.player === 'blue')) {
+                gameOver = true;
+                winner = piece.player;
+            }
+            
+            // Vittoria per eliminazione di tutti i pezzi
+            if (!gameOver) {
+                const redPieces = [];
+                const bluePieces = [];
+                
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 7; col++) {
+                        const p = newBoard[row][col];
+                        if (p) {
+                            if (p.player === 'red') redPieces.push(p);
+                            else bluePieces.push(p);
+                        }
+                    }
+                }
+                
+                if (redPieces.length === 0) {
+                    gameOver = true;
+                    winner = 'blue';
+                } else if (bluePieces.length === 0) {
+                    gameOver = true;
+                    winner = 'red';
+                }
+            }
+            
+            const updateData = {
+                board: newBoard,
+                currentPlayer: gameOver ? gameData.currentPlayer : nextPlayer,
+                gameOver: gameOver,
+                winner: winner,
+                lastMove: {
+                    from: [fromRow, fromCol],
+                    to: [toRow, toCol],
+                    player: piece.player,
+                    timestamp: Date.now()
+                }
+            };
+            
+            try {
+                await update(ref(database, `games/${currentGameId}`), updateData);
+            } catch (error) {
+                alert('Errore nel fare la mossa: ' + error.message);
+            }
+        }
+
+        // Funzioni di utilità (identiche alla versione locale)
+        function isWater(row, col) {
+            return specialCells.water.some(([r, c]) => r === row && c === col);
+        }
+
+        function isTrap(row, col) {
+            return [...specialCells.redTraps, ...specialCells.blueTraps].some(([r, c]) => r === row && c === col);
+        }
+
+        function isDen(row, col) {
+            return [...specialCells.redDen, ...specialCells.blueDen].some(([r, c]) => r === row && c === col);
+        }
+
+        function isRedDen(row, col) {
+            return specialCells.redDen.some(([r, c]) => r === row && c === col);
+        }
+
+        function isBlueDen(row, col) {
+            return specialCells.blueDen.some(([r, c]) => r === row && c === col);
+        }
+
+        function isEnemyTrap(row, col, player) {
+            if (player === 'red') {
+                return specialCells.blueTraps.some(([r, c]) => r === row && c === col);
+            } else {
+                return specialCells.redTraps.some(([r, c]) => r === row && c === col);
+            }
+        }
+
+        function getPossibleMoves(board, row, col) {
+            const piece = board[row][col];
+            if (!piece) return [];
+            
+            const moves = [];
+            const directions = [[-1,0], [1,0], [0,-1], [0,1]];
+            
+            for (let [dr, dc] of directions) {
+                let newRow = row + dr;
+                let newCol = col + dc;
+                
+                if (newRow < 0 || newRow >= 9 || newCol < 0 || newCol >= 7) continue;
+                
+                if ((piece.type === 6 || piece.type === 7) && isWater(newRow, newCol)) {
+                    while (newRow >= 0 && newRow < 9 && newCol >= 0 && newCol < 7 && isWater(newRow, newCol)) {
+                        if (board[newRow][newCol] && board[newRow][newCol].type === 1) break;
+                        newRow += dr;
+                        newCol += dc;
+                    }
+                    
+                    if (newRow >= 0 && newRow < 9 && newCol >= 0 && newCol < 7 && !isWater(newRow, newCol)) {
+                        if (canMoveTo(board, row, col, newRow, newCol)) {
+                            moves.push([newRow, newCol]);
+                        }
+                    }
+                } else if (canMoveTo(board, row, col, newRow, newCol)) {
+                    moves.push([newRow, newCol]);
+                }
+            }
+            
+            return moves;
+        }
+
+        function canMoveTo(board, fromRow, fromCol, toRow, toCol) {
+            const piece = board[fromRow][fromCol];
+            const targetPiece = board[toRow][toCol];
+            
+            if (targetPiece && targetPiece.player === piece.player) return false;
+            
+            if (isWater(toRow, toCol) && piece.type !== 1) return false;
+            
+            if ((piece.player === 'red' && isRedDen(toRow, toCol)) ||
+                (piece.player === 'blue' && isBlueDen(toRow, toCol))) return false;
+            
+            if (targetPiece) {
+                return canCapture(piece, targetPiece, toRow, toCol);
+            }
+            
+            return true;
+        }
+
+        function canCapture(attacker, defender, defenderRow, defenderCol) {
+            let attackerRank = attacker.type;
+            let defenderRank = defender.type;
+            
+            if (isEnemyTrap(defenderRow, defenderCol, defender.player)) {
+                defenderRank = 0;
+            }
+            
+            if (attacker.type === 1 && defender.type === 8) return true;
+            if (attacker.type === 8 && defender.type === 1) return false;
+            
+            return attackerRank >= defenderRank;
+        }
+
+        async function requestNewGame() {
+            if (!currentGameId || playerRole === 'spectator') return;
+            
+            if (confirm('Vuoi iniziare una nuova partita? Entrambi i giocatori dovranno essere d\'accordo.')) {
+                const resetData = {
+                    board: initialBoard,
+                    currentPlayer: 'red',
+                    gameOver: false,
+                    winner: null,
+                    lastMove: null,
+                    resetRequest: {
+                        from: playerRole,
+                        timestamp: Date.now()
+                    }
+                };
+                
+                try {
+                    await update(ref(database, `games/${currentGameId}`), resetData);
+                } catch (error) {
+                    alert('Errore nel resettare la partita: ' + error.message);
+                }
+            }
+        }
+
+        async function leaveGame() {
+            if (currentGameId) {
+                if (gameListener) {
+                    off(ref(database, `games/${currentGameId}`), 'value', gameListener);
+                }
+                
+                if (playerRole !== 'spectator') {
+                    try {
+                        await update(ref(database, `games/${currentGameId}/players/${playerRole}`), {
+                            connected: false
+                        });
+                    } catch (error) {
+                        console.error('Errore nell\'uscire dalla partita:', error);
+                    }
+                }
+                
+                currentGameId = null;
+                playerRole = null;
+                selectedPiece = null;
+            }
+            
+            document.getElementById('gameArea').classList.add('hidden');
+            document.getElementById('lobby').classList.remove('hidden');
+            document.getElementById('joinForm').classList.add('hidden');
+            document.getElementById('spectatorNotice').classList.add('hidden');
+            
+            // Reset form
+            document.getElementById('playerName').value = '';
+            document.getElementById('gameCode').value = '';
+        }
+    </script>
+</body>
+</html>
