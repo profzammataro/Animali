@@ -39,6 +39,8 @@
             font-size: 2.2em;
         }
 
+
+
         .lobby {
             text-align: center;
             padding: 20px;
@@ -67,6 +69,11 @@
 
         .lobby button:hover {
             background: #388e3c;
+        }
+
+        .lobby button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
         }
 
         .lobby button.secondary {
@@ -294,14 +301,14 @@
             </div>
             
             <div style="margin: 20px 0;">
-                <button onclick="createGame()">🎮 Crea Nuova Partita</button>
+                <button onclick="createGame()" id="createBtn">🎮 Crea Nuova Partita</button>
                 <button onclick="showJoinForm()" class="secondary">🔗 Unisciti a Partita</button>
             </div>
             
             <div id="joinForm" class="hidden" style="margin-top: 20px;">
                 <input type="text" id="gameCode" placeholder="Codice Partita (6 caratteri)" maxlength="6">
                 <br>
-                <button onclick="joinGame()" style="margin-top: 10px;">Unisciti!</button>
+                <button onclick="joinGame()" style="margin-top: 10px;" id="joinBtn">Unisciti!</button>
             </div>
         </div>
 
@@ -359,11 +366,17 @@
         </div>
     </div>
 
-    <!-- Firebase SDK -->
-    <script type="module">
-        // Import Firebase
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-        import { getDatabase, ref, set, push, on, off, update, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+    <!-- Firebase SDK con CDN -->
+    <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-database-compat.js"></script>
+    
+    <script>
+        // Global variables
+        let currentGameId = null;
+        let playerRole = null;
+        let playerName = '';
+        let gameListener = null;
+        let database = null;
 
         // Firebase configuration
         const firebaseConfig = {
@@ -377,14 +390,12 @@
         };
 
         // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const database = getDatabase(app);
-
-        // Global variables
-        let currentGameId = null;
-        let playerRole = null; // 'red', 'blue', or 'spectator'
-        let playerName = '';
-        let gameListener = null;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            database = firebase.database();
+        } catch (error) {
+            console.error('Errore inizializzazione Firebase:', error);
+        }
 
         // Game state
         const animals = {
@@ -420,20 +431,15 @@
 
         let selectedPiece = null;
 
-        // Make functions global
-        window.createGame = createGame;
-        window.showJoinForm = showJoinForm;
-        window.joinGame = joinGame;
-        window.requestNewGame = requestNewGame;
-        window.leaveGame = leaveGame;
-
         function generateGameCode() {
             return Math.random().toString(36).substring(2, 8).toUpperCase();
         }
 
         async function createGame() {
-            // Debug log
-            console.log('🎮 Tentativo creazione partita...');
+            if (!database) {
+                alert('Firebase non ancora pronto! Ricarica la pagina.');
+                return;
+            }
             
             const name = document.getElementById('playerName').value.trim();
             if (!name) {
@@ -442,7 +448,7 @@
             }
 
             // Mostra loading
-            const createBtn = event.target;
+            const createBtn = document.getElementById('createBtn');
             const originalText = createBtn.textContent;
             createBtn.textContent = '⏳ Creando...';
             createBtn.disabled = true;
@@ -450,8 +456,6 @@
             playerName = name;
             currentGameId = generateGameCode();
             playerRole = 'red';
-
-            console.log(`🎯 Codice partita: ${currentGameId}`);
 
             const gameData = {
                 board: initialBoard,
@@ -467,26 +471,19 @@
             };
 
             try {
-                console.log('📡 Tentativo scrittura Firebase...');
-                await set(ref(database, `games/${currentGameId}`), gameData);
-                console.log('✅ Partita creata con successo!');
-                
+                await database.ref(`games/${currentGameId}`).set(gameData);
                 setupDisconnectHandler();
                 showGameArea();
                 listenToGame();
             } catch (error) {
-                console.error('❌ Errore Firebase:', error);
-                
                 // Reset button
                 createBtn.textContent = originalText;
                 createBtn.disabled = false;
                 
                 if (error.code === 'PERMISSION_DENIED') {
                     alert('🔒 Errore permessi Firebase!\n\nVai su Firebase Console → Realtime Database → Rules e imposta:\n\n{\n  "rules": {\n    ".read": true,\n    ".write": true\n  }\n}');
-                } else if (error.code === 'NETWORK_ERROR') {
-                    alert('🌐 Problema di connessione!\nControlla la tua connessione internet.');
                 } else {
-                    alert(`❌ Errore: ${error.message}\n\nCodice: ${error.code || 'Unknown'}`);
+                    alert(`❌ Errore: ${error.message}`);
                 }
             }
         }
@@ -496,8 +493,6 @@
         }
 
         async function joinGame() {
-            console.log('🔗 Tentativo unione partita...');
-            
             const name = document.getElementById('playerName').value.trim();
             const code = document.getElementById('gameCode').value.trim().toUpperCase();
             
@@ -506,7 +501,7 @@
                 return;
             }
 
-            const joinBtn = event.target;
+            const joinBtn = document.getElementById('joinBtn');
             const originalText = joinBtn.textContent;
             joinBtn.textContent = '⏳ Connettendo...';
             joinBtn.disabled = true;
@@ -515,46 +510,30 @@
             currentGameId = code;
 
             try {
-                console.log(`🔍 Controllo partita ${code}...`);
-                
-                const gameRef = ref(database, `games/${currentGameId}`);
-                const gameSnapshot = await new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => reject(new Error('Timeout')), 10000);
-                    on(gameRef, 'value', (snapshot) => {
-                        clearTimeout(timeout);
-                        off(gameRef, 'value');
-                        resolve(snapshot);
-                    }, (error) => {
-                        clearTimeout(timeout);
-                        reject(error);
-                    });
-                });
+                const gameRef = database.ref(`games/${currentGameId}`);
+                const snapshot = await gameRef.once('value');
 
-                if (!gameSnapshot.exists()) {
+                if (!snapshot.exists()) {
                     throw new Error('Partita non trovata! Controlla il codice.');
                 }
 
-                const gameData = gameSnapshot.val();
-                console.log('📊 Dati partita ricevuti:', gameData);
+                const gameData = snapshot.val();
                 
                 // Determina il ruolo del giocatore
                 if (!gameData.players.blue.name) {
                     playerRole = 'blue';
-                    await update(ref(database, `games/${currentGameId}/players/blue`), {
+                    await gameRef.child('players/blue').update({
                         name: playerName,
                         connected: true
                     });
-                    console.log('🔵 Assegnato ruolo BLU');
                 } else if (!gameData.players.red.name) {
                     playerRole = 'red';
-                    await update(ref(database, `games/${currentGameId}/players/red`), {
+                    await gameRef.child('players/red').update({
                         name: playerName,
                         connected: true
                     });
-                    console.log('🔴 Assegnato ruolo ROSSO');
                 } else {
                     playerRole = 'spectator';
-                    console.log('👁️ Modalità spettatore');
                 }
 
                 setupDisconnectHandler();
@@ -562,26 +541,18 @@
                 listenToGame();
                 
             } catch (error) {
-                console.error('❌ Errore unione:', error);
-                
                 // Reset button
                 joinBtn.textContent = originalText;
                 joinBtn.disabled = false;
                 
-                if (error.code === 'PERMISSION_DENIED') {
-                    alert('🔒 Errore permessi Firebase!');
-                } else if (error.message === 'Timeout') {
-                    alert('⏱️ Timeout connessione! Riprova.');
-                } else {
-                    alert(`❌ Errore: ${error.message}`);
-                }
+                alert(`❌ Errore: ${error.message}`);
             }
         }
 
         function setupDisconnectHandler() {
-            if (playerRole !== 'spectator') {
-                const playerRef = ref(database, `games/${currentGameId}/players/${playerRole}/connected`);
-                onDisconnect(playerRef).set(false);
+            if (playerRole !== 'spectator' && database) {
+                const playerRef = database.ref(`games/${currentGameId}/players/${playerRole}/connected`);
+                playerRef.onDisconnect().set(false);
             }
         }
 
@@ -598,9 +569,11 @@
         }
 
         function listenToGame() {
-            if (gameListener) off(ref(database, `games/${currentGameId}`), 'value', gameListener);
+            if (gameListener) {
+                database.ref(`games/${currentGameId}`).off('value', gameListener);
+            }
             
-            const gameRef = ref(database, `games/${currentGameId}`);
+            const gameRef = database.ref(`games/${currentGameId}`);
             gameListener = (snapshot) => {
                 if (snapshot.exists()) {
                     const gameData = snapshot.val();
@@ -611,7 +584,7 @@
                 }
             };
             
-            on(gameRef, 'value', gameListener);
+            gameRef.on('value', gameListener);
         }
 
         function updateGameUI(gameData) {
@@ -693,54 +666,49 @@
 
         function highlightLastMove(lastMove) {
             setTimeout(() => {
-                const fromCell = document.querySelector(`[data-row="${lastMove.from[0]}"][data-col="${lastMove.from[1]}"]`);
                 const toCell = document.querySelector(`[data-row="${lastMove.to[0]}"][data-col="${lastMove.to[1]}"]`);
-                
-                if (toCell) toCell.classList.add('last-move');
-                
-                setTimeout(() => {
-                    if (toCell) toCell.classList.remove('last-move');
-                }, 1000);
+                if (toCell) {
+                    toCell.classList.add('last-move');
+                    setTimeout(() => toCell.classList.remove('last-move'), 1000);
+                }
             }, 100);
         }
 
         async function handleCellClick(row, col) {
             if (playerRole === 'spectator') return;
             
-            // Ottieni i dati di gioco correnti
-            const gameRef = ref(database, `games/${currentGameId}`);
-            const snapshot = await new Promise((resolve) => {
-                on(gameRef, 'value', (snapshot) => {
-                    resolve(snapshot);
-                    off(gameRef, 'value');
-                });
-            });
-            
-            if (!snapshot.exists()) return;
-            const gameData = snapshot.val();
-            
-            if (gameData.gameOver) return;
-            if (gameData.currentPlayer !== playerRole) return;
-            if (!gameData.players.red.name || !gameData.players.blue.name) return;
-            
-            const board = gameData.board;
-            const piece = board[row][col];
-            
-            if (selectedPiece) {
-                if (canMoveTo(board, selectedPiece.row, selectedPiece.col, row, col)) {
-                    await makeMove(selectedPiece.row, selectedPiece.col, row, col, gameData);
-                    selectedPiece = null;
-                    clearHighlights();
-                } else {
-                    if (piece && piece.player === playerRole) {
-                        selectPiece(row, col, board);
-                    } else {
+            try {
+                const gameRef = database.ref(`games/${currentGameId}`);
+                const snapshot = await gameRef.once('value');
+                
+                if (!snapshot.exists()) return;
+                const gameData = snapshot.val();
+                
+                if (gameData.gameOver) return;
+                if (gameData.currentPlayer !== playerRole) return;
+                if (!gameData.players.red.name || !gameData.players.blue.name) return;
+                
+                const board = gameData.board;
+                const piece = board[row][col];
+                
+                if (selectedPiece) {
+                    if (canMoveTo(board, selectedPiece.row, selectedPiece.col, row, col)) {
+                        await makeMove(selectedPiece.row, selectedPiece.col, row, col, gameData);
                         selectedPiece = null;
                         clearHighlights();
+                    } else {
+                        if (piece && piece.player === playerRole) {
+                            selectPiece(row, col, board);
+                        } else {
+                            selectedPiece = null;
+                            clearHighlights();
+                        }
                     }
+                } else if (piece && piece.player === playerRole) {
+                    selectPiece(row, col, board);
                 }
-            } else if (piece && piece.player === playerRole) {
-                selectPiece(row, col, board);
+            } catch (error) {
+                console.error('Errore gestione clic:', error);
             }
         }
 
@@ -765,70 +733,70 @@
         }
 
         async function makeMove(fromRow, fromCol, toRow, toCol, gameData) {
-            const newBoard = JSON.parse(JSON.stringify(gameData.board));
-            const piece = newBoard[fromRow][fromCol];
-            
-            newBoard[toRow][toCol] = piece;
-            newBoard[fromRow][fromCol] = null;
-            
-            const nextPlayer = gameData.currentPlayer === 'red' ? 'blue' : 'red';
-            
-            // Controlla condizioni di vittoria
-            let gameOver = false;
-            let winner = null;
-            
-            // Vittoria per raggiungimento tana
-            if ((toRow === 0 && toCol === 3 && piece.player === 'red') ||
-                (toRow === 8 && toCol === 3 && piece.player === 'blue')) {
-                gameOver = true;
-                winner = piece.player;
-            }
-            
-            // Vittoria per eliminazione di tutti i pezzi
-            if (!gameOver) {
-                const redPieces = [];
-                const bluePieces = [];
+            try {
+                const newBoard = JSON.parse(JSON.stringify(gameData.board));
+                const piece = newBoard[fromRow][fromCol];
                 
-                for (let row = 0; row < 9; row++) {
-                    for (let col = 0; col < 7; col++) {
-                        const p = newBoard[row][col];
-                        if (p) {
-                            if (p.player === 'red') redPieces.push(p);
-                            else bluePieces.push(p);
+                newBoard[toRow][toCol] = piece;
+                newBoard[fromRow][fromCol] = null;
+                
+                const nextPlayer = gameData.currentPlayer === 'red' ? 'blue' : 'red';
+                
+                // Controlla condizioni di vittoria
+                let gameOver = false;
+                let winner = null;
+                
+                // Vittoria per raggiungimento tana
+                if ((toRow === 0 && toCol === 3 && piece.player === 'red') ||
+                    (toRow === 8 && toCol === 3 && piece.player === 'blue')) {
+                    gameOver = true;
+                    winner = piece.player;
+                }
+                
+                // Vittoria per eliminazione di tutti i pezzi
+                if (!gameOver) {
+                    const redPieces = [];
+                    const bluePieces = [];
+                    
+                    for (let row = 0; row < 9; row++) {
+                        for (let col = 0; col < 7; col++) {
+                            const p = newBoard[row][col];
+                            if (p) {
+                                if (p.player === 'red') redPieces.push(p);
+                                else bluePieces.push(p);
+                            }
                         }
+                    }
+                    
+                    if (redPieces.length === 0) {
+                        gameOver = true;
+                        winner = 'blue';
+                    } else if (bluePieces.length === 0) {
+                        gameOver = true;
+                        winner = 'red';
                     }
                 }
                 
-                if (redPieces.length === 0) {
-                    gameOver = true;
-                    winner = 'blue';
-                } else if (bluePieces.length === 0) {
-                    gameOver = true;
-                    winner = 'red';
-                }
-            }
-            
-            const updateData = {
-                board: newBoard,
-                currentPlayer: gameOver ? gameData.currentPlayer : nextPlayer,
-                gameOver: gameOver,
-                winner: winner,
-                lastMove: {
-                    from: [fromRow, fromCol],
-                    to: [toRow, toCol],
-                    player: piece.player,
-                    timestamp: Date.now()
-                }
-            };
-            
-            try {
-                await update(ref(database, `games/${currentGameId}`), updateData);
+                const updateData = {
+                    board: newBoard,
+                    currentPlayer: gameOver ? gameData.currentPlayer : nextPlayer,
+                    gameOver: gameOver,
+                    winner: winner,
+                    lastMove: {
+                        from: [fromRow, fromCol],
+                        to: [toRow, toCol],
+                        player: piece.player,
+                        timestamp: Date.now()
+                    }
+                };
+                
+                await database.ref(`games/${currentGameId}`).update(updateData);
             } catch (error) {
-                alert('Errore nel fare la mossa: ' + error.message);
+                console.error('Errore nel fare la mossa:', error);
             }
         }
 
-        // Funzioni di utilità (identiche alla versione locale)
+        // Funzioni di utilità
         function isWater(row, col) {
             return specialCells.water.some(([r, c]) => r === row && c === col);
         }
@@ -939,7 +907,7 @@
                 };
                 
                 try {
-                    await update(ref(database, `games/${currentGameId}`), resetData);
+                    await database.ref(`games/${currentGameId}`).update(resetData);
                 } catch (error) {
                     alert('Errore nel resettare la partita: ' + error.message);
                 }
@@ -948,15 +916,13 @@
 
         async function leaveGame() {
             if (currentGameId) {
-                if (gameListener) {
-                    off(ref(database, `games/${currentGameId}`), 'value', gameListener);
+                if (gameListener && database) {
+                    database.ref(`games/${currentGameId}`).off('value', gameListener);
                 }
                 
-                if (playerRole !== 'spectator') {
+                if (playerRole !== 'spectator' && database) {
                     try {
-                        await update(ref(database, `games/${currentGameId}/players/${playerRole}`), {
-                            connected: false
-                        });
+                        await database.ref(`games/${currentGameId}/players/${playerRole}/connected`).set(false);
                     } catch (error) {
                         console.error('Errore nell\'uscire dalla partita:', error);
                     }
@@ -975,6 +941,14 @@
             // Reset form
             document.getElementById('playerName').value = '';
             document.getElementById('gameCode').value = '';
+            
+            // Reset buttons
+            const createBtn = document.getElementById('createBtn');
+            const joinBtn = document.getElementById('joinBtn');
+            createBtn.textContent = '🎮 Crea Nuova Partita';
+            createBtn.disabled = false;
+            joinBtn.textContent = 'Unisciti!';
+            joinBtn.disabled = false;
         }
     </script>
 </body>
