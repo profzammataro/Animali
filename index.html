@@ -39,8 +39,6 @@
             font-size: 2.2em;
         }
 
-
-
         .lobby {
             text-align: center;
             padding: 20px;
@@ -178,26 +176,28 @@
         }
 
         .piece {
-            width: 100%;
-            height: 100%;
+            width: 90%;
+            height: 90%;
             display: flex;
             align-items: center;
             justify-content: center;
             border-radius: 50%;
-            font-size: 16px;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
 
         .red-piece {
-            background: linear-gradient(45deg, #f44336, #c62828);
-            color: white;
-            border: 2px solid #b71c1c;
+            background: linear-gradient(145deg, #ff5722, #d84315) !important;
+            color: white !important;
+            border: 3px solid #bf360c !important;
         }
 
         .blue-piece {
-            background: linear-gradient(45deg, #2196f3, #1976d2);
-            color: white;
-            border: 2px solid #0d47a1;
+            background: linear-gradient(145deg, #2196f3, #1565c0) !important;
+            color: white !important;
+            border: 3px solid #0d47a1 !important;
         }
 
         .status {
@@ -813,143 +813,143 @@
             return specialCells.redDen.some(([r, c]) => r === row && c === col);
         }
 
-        function isBlueDen(row, col) {
-            return specialCells.blueDen.some(([r, c]) => r === row && c === col);
-        }
-
-        function isEnemyTrap(row, col, player) {
-            if (player === 'red') {
-                return specialCells.blueTraps.some(([r, c]) => r === row && c === col);
-            } else {
-                return specialCells.redTraps.some(([r, c]) => r === row && c === col);
-            }
-        }
-
-        function getPossibleMoves(board, row, col) {
-            const piece = board[row][col];
-            if (!piece) return [];
-            
-            const moves = [];
-            const directions = [[-1,0], [1,0], [0,-1], [0,1]];
-            
-            for (let [dr, dc] of directions) {
-                let newRow = row + dr;
-                let newCol = col + dc;
-                
-                if (newRow < 0 || newRow >= 9 || newCol < 0 || newCol >= 7) continue;
-                
-                if ((piece.type === 6 || piece.type === 7) && isWater(newRow, newCol)) {
-                    while (newRow >= 0 && newRow < 9 && newCol >= 0 && newCol < 7 && isWater(newRow, newCol)) {
-                        if (board[newRow][newCol] && board[newRow][newCol].type === 1) break;
-                        newRow += dr;
-                        newCol += dc;
-                    }
-                    
-                    if (newRow >= 0 && newRow < 9 && newCol >= 0 && newCol < 7 && !isWater(newRow, newCol)) {
-                        if (canMoveTo(board, row, col, newRow, newCol)) {
-                            moves.push([newRow, newCol]);
-                        }
-                    }
-                } else if (canMoveTo(board, row, col, newRow, newCol)) {
-                    moves.push([newRow, newCol]);
-                }
-            }
-            
-            return moves;
-        }
-
-        function canMoveTo(board, fromRow, fromCol, toRow, toCol) {
-            const piece = board[fromRow][fromCol];
-            const targetPiece = board[toRow][toCol];
-            
-            if (targetPiece && targetPiece.player === piece.player) return false;
-            
-            if (isWater(toRow, toCol) && piece.type !== 1) return false;
-            
-            if ((piece.player === 'red' && isRedDen(toRow, toCol)) ||
-                (piece.player === 'blue' && isBlueDen(toRow, toCol))) return false;
-            
-            if (targetPiece) {
-                return canCapture(piece, targetPiece, toRow, toCol);
-            }
-            
-            return true;
-        }
-
-        function canCapture(attacker, defender, defenderRow, defenderCol) {
-            let attackerRank = attacker.type;
-            let defenderRank = defender.type;
-            
-            if (isEnemyTrap(defenderRow, defenderCol, defender.player)) {
-                defenderRank = 0;
-            }
-            
-            if (attacker.type === 1 && defender.type === 8) return true;
-            if (attacker.type === 8 && defender.type === 1) return false;
-            
-            return attackerRank >= defenderRank;
-        }
-
-        async function requestNewGame() {
-            if (!currentGameId || playerRole === 'spectator') return;
-            
-            if (confirm('Vuoi iniziare una nuova partita? Entrambi i giocatori dovranno essere d\'accordo.')) {
-                const resetData = {
-                    board: initialBoard,
-                    currentPlayer: 'red',
-                    gameOver: false,
-                    winner: null,
-                    lastMove: null,
-                    resetRequest: {
-                        from: playerRole,
-                        timestamp: Date.now()
-                    }
-                };
-                
-                try {
-                    await database.ref(`games/${currentGameId}`).update(resetData);
-                } catch (error) {
-                    alert('Errore nel resettare la partita: ' + error.message);
-                }
-            }
-        }
-
-        async function leaveGame() {
-            if (currentGameId) {
-                if (gameListener && database) {
-                    database.ref(`games/${currentGameId}`).off('value', gameListener);
-                }
-                
-                if (playerRole !== 'spectator' && database) {
-                    try {
-                        await database.ref(`games/${currentGameId}/players/${playerRole}/connected`).set(false);
-                    } catch (error) {
-                        console.error('Errore nell\'uscire dalla partita:', error);
-                    }
-                }
-                
-                currentGameId = null;
-                playerRole = null;
-                selectedPiece = null;
-            }
-            
-            document.getElementById('gameArea').classList.add('hidden');
-            document.getElementById('lobby').classList.remove('hidden');
-            document.getElementById('joinForm').classList.add('hidden');
-            document.getElementById('spectatorNotice').classList.add('hidden');
-            
-            // Reset form
-            document.getElementById('playerName').value = '';
-            document.getElementById('gameCode').value = '';
-            
-            // Reset buttons
-            const createBtn = document.getElementById('createBtn');
-            const joinBtn = document.getElementById('joinBtn');
-            createBtn.textContent = '🎮 Crea Nuova Partita';
-            createBtn.disabled = false;
-            joinBtn.textContent = 'Unisciti!';
-            joinBtn.disabled = false;
-        }
-    </script>
-</body>
-</html>
+       function isBlueDen(row, col) {
+       return specialCells.blueDen.some(([r, c]) => r === row && c === col);
+       }
+       
+       function isEnemyTrap(row, col, player) {
+       if (player === 'red') {
+       return specialCells.blueTraps.some(([r, c]) => r === row && c === col);
+       } else {
+       return specialCells.redTraps.some(([r, c]) => r === row && c === col);
+       }
+       }
+       
+       function getPossibleMoves(board, row, col) {
+       const piece = board[row][col];
+       if (!piece) return [];
+       
+       const moves = [];
+       const directions = [[-1,0], [1,0], [0,-1], [0,1]];
+       
+       for (let [dr, dc] of directions) {
+       let newRow = row + dr;
+       let newCol = col + dc;
+       
+       if (newRow < 0 || newRow >= 9 || newCol < 0 || newCol >= 7) continue;
+       
+       if ((piece.type === 6 || piece.type === 7) && isWater(newRow, newCol)) {
+       while (newRow >= 0 && newRow < 9 && newCol >= 0 && newCol < 7 && isWater(newRow, newCol)) {
+       if (board[newRow][newCol] && board[newRow][newCol].type === 1) break;
+       newRow += dr;
+       newCol += dc;
+       }
+       
+       if (newRow >= 0 && newRow < 9 && newCol >= 0 && newCol < 7 && !isWater(newRow, newCol)) {
+       if (canMoveTo(board, row, col, newRow, newCol)) {
+       moves.push([newRow, newCol]);
+       }
+       }
+       } else if (canMoveTo(board, row, col, newRow, newCol)) {
+       moves.push([newRow, newCol]);
+       }
+       }
+       
+       return moves;
+       }
+       
+       function canMoveTo(board, fromRow, fromCol, toRow, toCol) {
+       const piece = board[fromRow][fromCol];
+       const targetPiece = board[toRow][toCol];
+       
+       if (targetPiece && targetPiece.player === piece.player) return false;
+       
+       if (isWater(toRow, toCol) && piece.type !== 1) return false;
+       
+       if ((piece.player === 'red' && isRedDen(toRow, toCol)) ||
+       (piece.player === 'blue' && isBlueDen(toRow, toCol))) return false;
+       
+       if (targetPiece) {
+       return canCapture(piece, targetPiece, toRow, toCol);
+       }
+       
+       return true;
+       }
+       
+       function canCapture(attacker, defender, defenderRow, defenderCol) {
+       let attackerRank = attacker.type;
+       let defenderRank = defender.type;
+       
+       if (isEnemyTrap(defenderRow, defenderCol, defender.player)) {
+       defenderRank = 0;
+       }
+       
+       if (attacker.type === 1 && defender.type === 8) return true;
+       if (attacker.type === 8 && defender.type === 1) return false;
+       
+       return attackerRank >= defenderRank;
+       }
+       
+       async function requestNewGame() {
+       if (!currentGameId || playerRole === 'spectator') return;
+       
+       if (confirm('Vuoi iniziare una nuova partita? Entrambi i giocatori dovranno essere d\'accordo.')) {
+       const resetData = {
+       board: initialBoard,
+       currentPlayer: 'red',
+       gameOver: false,
+       winner: null,
+       lastMove: null,
+       resetRequest: {
+       from: playerRole,
+       timestamp: Date.now()
+       }
+       };
+       
+       try {
+       await database.ref(`games/${currentGameId}`).update(resetData);
+       } catch (error) {
+       alert('Errore nel resettare la partita: ' + error.message);
+       }
+       }
+       }
+       
+       async function leaveGame() {
+       if (currentGameId) {
+       if (gameListener && database) {
+       database.ref(`games/${currentGameId}`).off('value', gameListener);
+       }
+       
+       if (playerRole !== 'spectator' && database) {
+       try {
+       await database.ref(`games/${currentGameId}/players/${playerRole}/connected`).set(false);
+       } catch (error) {
+       console.error('Errore nell\'uscire dalla partita:', error);
+       }
+       }
+       
+       currentGameId = null;
+       playerRole = null;
+       selectedPiece = null;
+       }
+       
+       document.getElementById('gameArea').classList.add('hidden');
+       document.getElementById('lobby').classList.remove('hidden');
+       document.getElementById('joinForm').classList.add('hidden');
+       document.getElementById('spectatorNotice').classList.add('hidden');
+       
+       // Reset form
+       document.getElementById('playerName').value = '';
+       document.getElementById('gameCode').value = '';
+       
+       // Reset buttons
+       const createBtn = document.getElementById('createBtn');
+       const joinBtn = document.getElementById('joinBtn');
+       createBtn.textContent = '🎮 Crea Nuova Partita';
+       createBtn.disabled = false;
+       joinBtn.textContent = 'Unisciti!';
+       joinBtn.disabled = false;
+       }
+       </script>
+       </body>
+       </html>
